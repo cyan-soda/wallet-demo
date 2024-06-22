@@ -12,7 +12,8 @@ import {
     useSignMessage
 } from "wagmi"
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, } from "react";
+import { walletService } from "../api/service";
 
 const WalletOptions = () => {
     const { connect, connectors, isPending, isError, error } = useConnect();
@@ -25,7 +26,7 @@ const WalletOptions = () => {
                     disabled={isPending || isError}
                     key={connector.id}
                     onClick={() => connect({ connector })}
-                    className='px-5 py-4 mt-2 bg-black text-base text-slate-100 font-semibold rounded-3xl'
+                    className='px-5 py-4 mt-2 bg-black text-base text-slate-100 font-semibold rounded-3xl hover:cursor-pointer hover:bg-zinc-500 shadow-inner'
                 >
                     {connector.name}
                 </button>
@@ -41,12 +42,7 @@ const SwitchChain = () => {
     const { chains, switchChain, error, isError } = useSwitchChain();
     return (
         <div>
-            <div className="flex flex-col flex-1 h-full items-center justify-between gap-2 p-16 bg-white rounded-3xl">
-                {/* <div className="flex flex-row items-center justify-between">
-                    <FiArrowLeft />
-                    <span className="text-base font-semibold">Choose Network</span>
-                    <FiX />
-                </div> */}
+            <div className="flex flex-col flex-1 h-full items-center justify-between gap-2 rounded-3xl bg-zinc-100 shadow-inner p-16">
                 <span className="text-black  text-4xl font-semibold">Choose Network</span>
                 <div className="flex flex-col flex-1 h-full items-center justify-between gap-1">
                     <span className="text-md font-medium mb-4 mt-8">Current connected chain: {chainId}</span>
@@ -56,9 +52,10 @@ const SwitchChain = () => {
                             type="button"
                             disabled={chainId === c.id}
                             onClick={() => {
-                                switchChain({ chainId: c.id })
+                                switchChain({ chainId: c.id }),
+                                window.location.reload()
                             }}
-                            className='p-4 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full disabled:bg-gray-300'
+                            className='p-4 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full disabled:bg-gray-300 hover:cursor-pointer hover:bg-zinc-500 shadow-inner'
                         >
                             {c.name}
                         </button>
@@ -108,6 +105,10 @@ const PostSignIn = async (
 ): Promise<SIGN_RESPONSE> => {
     const res = await fetch('https://api.inz-dev.esollabs.com/v1/dapp/auth/sign_in', {
         method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
             signature,
             nonce,
@@ -115,16 +116,14 @@ const PostSignIn = async (
             chain_id
         })
     });
-    console.log("hehe", res)
     const data: SIGN_RESPONSE = await res.json();
-    console.log(data);
     return data;
 }
 
 const Profile = () => {
     const { address, connector, isConnected } = useAccount();
     const { disconnect } = useDisconnect();
-    const { data, isError, isLoading } = useBalance();
+    const { data, isError, isLoading } = useBalance({ address });
     const chainId = useChainId();
 
     const { data: ensName } = useEnsName({ address });
@@ -135,67 +134,115 @@ const Profile = () => {
         setIsSwitch(!isSwitch)
     }
 
-    const { data: signMessageData, error, signMessage, variables } = useSignMessage();
+    const { data: signMessageData, error, variables, signMessageAsync } = useSignMessage();
     const [message, setMessage] = useState('');
     const [nonce, setNonce] = useState('');
+    const [aToken, setAToken] = useState('');
     const [signature, setSignature] = useState('');
 
-    const handleSignMsg = async () => {
-        const data:any = await GetSignMessage();
-        if(data && data.data){
-            setMessage(data.data.sign_msg);
-            setNonce(data.data.nonce);
-            signMessage({ message: data.data.sign_msg });
-        }    
+    // const handleSignMsg = async () => {
+    //     const data: any = await GetSignMessage();
+    //     if (data && data.data) {
+    //         setMessage(data.data.sign_msg);
+    //         setNonce(data.data.nonce);
+    //         signMessage({ message: data.data.sign_msg });
+    //     }
+    // }
+
+    // useEffect(() => {
+    //     console.log('signMessageData', signMessageData);
+    //     ; (async () => {
+    //         if (signMessageData && variables.message) {
+    //             const signInData = await PostSignIn(
+    //                 signMessageData!,
+    //                 nonce,
+    //                 address!,
+    //                 chainId
+    //             );
+    //             console.log("Sign in response: ", signInData);
+    //             setAToken(signInData.data.access_token);
+    //         }
+    //     })()
+    // }, [signMessageData, variables?.message]);
+
+    const fetchData = async () => {
+        try {
+            const response: any = await walletService.getSignMessage();
+            if (response) {
+                setMessage(response.sign_msg);
+                setNonce(response.nonce);
+                signMessageAsync({ message: response.sign_msg })
+            }
+            else {
+                console.error('Error fetching data.');
+            }
+        }
+        catch (error) {
+            console.error('Error fetching data.');
+        }
+    }
+
+    const postData = async (as: {signature: string, nonce: string, public_address: string, chain_id: number}) => {
+        try {
+            const res = await walletService.postSignIn({
+                signature: signMessageData!,
+                public_address: address!,
+                chain_id: chainId,
+                nonce: nonce
+            })
+            if (res) {
+                setAToken(res.access_token)
+            }
+            else {
+                console.error('Error posting data 1.')
+            }
+        }
+        catch (error) {
+            console.error('Error posting data 2.')
+        }
     }
 
     useEffect(() => {
-        console.log('signMessageData', signMessageData);
-        ;(async () => {
-            if (signMessageData && variables.message) {
-                // handleSign()
-                const signInData = await PostSignIn(
-                    signMessageData!, 
-                    nonce, 
-                    address!, 
-                    chainId
-                );
-                console.log("Sign in response: ", signInData);
-            }
-        })()  
-    }, [signMessageData, variables?.message]);
+        if (signMessageData) {
+            postData({
+                signature: signMessageData,
+                nonce: nonce,
+                public_address: address!,
+                chain_id: chainId
+            })
+        }
+    }, [signMessageData, variables?.message])
 
     // useEffect(() => {
-    //     const fetchData = async () => {
-    //         const data = await GetSignMessage();
-    //         setMessage(data.data.sign_msg);
-    //         setNonce(data.data.nonce);
-    //     };
-    //     // const getSignMessage = async () => {
-    //     //     const data = await signMessage({ message });
-    //     //     setSignature(data!);
-    //     // }
-    //     // getSignMessage();
-    //     fetchData();
-    // }, [address, signMessageData]);
-
-    const handleSign = async () => {
-        const signInData = await PostSignIn(
-            signMessageData!, 
-            nonce, 
-            address!, 
-            chainId
-        );
-        console.log("Sign in response: ", signInData);
-    }
+    //     console.log('signature: ', signMessageData);
+    //     (async () => {
+    //         try {
+    //             const signInData = await axios.post('https://api.inz-dev.esollabs.com/v1/dapp/auth/sign', {
+    //                 signature: signMessageData!,
+    //                 nonce: nonce,
+    //                 public_address: address,
+    //                 chain_id: chainId
+    //             }, {
+    //                 headers: {
+    //                     'Accept': 'application/json',
+    //                     'Content-Type': 'application/json'
+    //                 }
+    //             });
+    //             console.log("Sign in response: ", signInData);
+    //             setAToken(signInData.data.data.access_token);
+    //         } catch {
+    //             console.error('Error getting access token.');
+    //         }
+    //     })();
+    // }, [signMessageData, variables?.message]);
 
     if (isConnected) {
         return (
-            <div>
+            <div className="flex flex-col items-center w-full">
                 {isSwitch && <SwitchChain />}
                 {!isSwitch &&
-                    <div className="flex flex-col items-center gap-2 bg-zinc-100 p-16 my-16 rounded-3xl h-full">
-                        <span className="text-black  text-4xl font-semibold">Your profile</span>
+                    <div className="flex flex-col items-center gap-2 bg-zinc-100 p-16 my-16 rounded-3xl h-full shadow-inner">
+                        {/* <span className="text-black  text-4xl font-semibold">Your profile</span> */}
                         <div className="flex flex-col items-center justify-between gap-2 mb-4 mt-8">
                             <div className="w-10 h-10 rounded-3xl bg-black">
                                 <img src={ensAvatar ?? ''} alt="" />
@@ -210,33 +257,34 @@ const Profile = () => {
                         </div>
                         <div className="flex flex-col w-full">
                             <button
-                                className='p-5 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full'
+                                className='p-4 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full hover:cursor-pointer hover:bg-zinc-500 shadow-inner'
                                 onClick={() => handleSwitchNetwork()}
                             >
                                 Switch network
                             </button>
                             <button
-                                className='p-5 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full'
+                                className='p-4 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full hover:cursor-pointer hover:bg-zinc-500 shadow-inner'
                                 onClick={() => disconnect()}
                             >
                                 Disconnect
                             </button>
                             <button
-                                className='p-5 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full'
+                                className='p-4 mt-2 bg-black text-slate-100 font-semibold rounded-3xl w-full hover:cursor-pointer hover:bg-zinc-500 shadow-inner'
                                 onClick={() => {
-                                    handleSignMsg()
+                                    fetchData()
                                 }}
                             >
                                 Sign
                             </button>
                         </div>
                         {signMessageData &&
-                            <div className="pt-6">
+                            <div className="pt-6 w-full">
                                 <div>Public address: {address}</div>
                                 <div>Chain ID: {chainId}</div>
                                 <div>Message: {message}</div>
                                 <div>Nonce: {nonce}</div>
-                                <div>Signature: {signMessageData.substring(0, 20)}</div>
+                                <div>Signature: {signMessageData.substring(0, 50).concat(`...`)}</div>
+                                <div>Access token: {aToken.substring(0, 50).concat(`...`)}</div>
                             </div>
                         }
                         {error && <div>{error.message}</div>}
@@ -250,12 +298,12 @@ const Profile = () => {
 const SignIn = () => {
     const { isConnected } = useAccount();
     return (
-        <main className="flex min-h-screen flex-col items-center p-24 bg-white">
+        <main className="flex h-screen flex-row items-center p-24 bg-white">
             {!isConnected &&
-                <>
-                    <span className="text-black  text-4xl font-semibold">Hello, please connect to your wallet.</span>
+                <div className="flex flex-col items-center w-full bg-zinc-100 p-16 rounded-3xl shadow-inner">
+                    <span className="text-black text-4xl font-semibold text-center">Connect via:</span>
                     <WalletOptions />
-                </>
+                </div>
             }
             {isConnected &&
                 <>
