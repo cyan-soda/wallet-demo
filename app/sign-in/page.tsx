@@ -14,25 +14,24 @@ import {
 
 import { useEffect, useState, } from "react";
 import { walletService } from "../api/service";
+import { injected, metaMask } from "wagmi/connectors";
 
 const WalletOptions = () => {
     const { connect, connectors, isPending, isError, error } = useConnect();
     const { connector: activeConnector, isConnected } = useAccount();
     return (
-        <div className="flex flex-col items-start justify-between mt-8">
+        <div className="flex flex-col items-center justify-between">
+            <span className="text-black  text-4xl font-semibold mb-8">Connect to your wallet</span>
             {isConnected && <div>Connected to {activeConnector?.name}</div>}
-            {connectors.map((connector: Connector) => (
+            {/* {connectors.map((connector: Connector) => ( */}
                 <button
-                    disabled={isPending || isError}
-                    key={connector.id}
-                    onClick={() => connect({ connector })}
+                    // disabled={isPending || isError}
+                    onClick={() => connect({ connector: injected() })}
                     className='px-5 py-4 mt-2 bg-black text-base text-slate-100 font-semibold rounded-3xl hover:cursor-pointer hover:bg-zinc-500 shadow-inner'
                 >
-                    {connector.name}
+                    Connect
                 </button>
-            ))}
-
-            {isError && <div>{error.message}</div>}
+            {/* ))} */}
         </div>
     )
 }
@@ -301,7 +300,6 @@ const SignIn = () => {
         <main className="flex h-screen flex-row items-center p-24 bg-white">
             {!isConnected &&
                 <div className="flex flex-col items-center w-full bg-zinc-100 p-16 rounded-3xl shadow-inner">
-                    <span className="text-black text-4xl font-semibold text-center">Connect via:</span>
                     <WalletOptions />
                 </div>
             }
